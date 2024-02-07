@@ -149,6 +149,12 @@ enum PluginError:Int {
             try secret.save(secretStr, invalidateOnEnrollment: invalidateOnEnrollment)
             pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: "Success");
         } catch {
+            var code = PluginError.BIOMETRIC_UNKNOWN_ERROR.rawValue
+            var message = error.localizedDescription
+            if let err = error as? KeychainError {
+                code = err.pluginError.rawValue
+                message = err.localizedDescription
+            }
             let errorResult = ["code": PluginError.BIOMETRIC_UNKNOWN_ERROR.rawValue, "message": error.localizedDescription] as [String : Any];
             pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: errorResult);
         }
@@ -180,6 +186,27 @@ enum PluginError:Int {
         self.commandDelegate.send(pluginResult, callbackId:command.callbackId)
     }
 
+    func deleteAllSecret(_ command: CDVInvokedUrlCommand) {
+        let data  = command.arguments[0] as AnyObject?;
+        var pluginResult: CDVPluginResult
+        do {
+            let secret = Secret()
+            try? secret.delete()
+            pluginResult = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: "Success");
+        } catch {
+            var code = PluginError.BIOMETRIC_UNKNOWN_ERROR.rawValue
+            var message = error.localizedDescription
+            if let err = error as? KeychainError {
+                code = err.pluginError.rawValue
+                message = err.localizedDescription
+            }
+            let errorResult = ["code": code, "message": message] as [String : Any]
+            pluginResult = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: errorResult);
+        }
+        self.commandDelegate.send(pluginResult, callbackId:command.callbackId)
+        return
+    }
+
     @objc(authenticate:)
     func authenticate(_ command: CDVInvokedUrlCommand){
         justAuthenticate(command)
@@ -198,6 +225,12 @@ enum PluginError:Int {
     func loadBiometricSecret(_ command: CDVInvokedUrlCommand){
         self.loadSecret(command)
     }
+
+    @objc(clearAllBiometricSecret:)
+    func clearAllBiometricSecret(_ command: CDVInvokedUrlCommand){
+        self.deleteAllSecret(command)
+    }
+    
 
     override func pluginInitialize() {
         super.pluginInitialize()

@@ -43,7 +43,14 @@ public class BiometricActivity extends AppCompatActivity {
         Executor executor = handler::post;
         mBiometricPrompt = new BiometricPrompt(this, executor, mAuthenticationCallback);
         try {
-            authenticate();
+            switch (mPromptInfo.getType()) {
+                case CLEAR_SECRET:
+                    clearSecret();
+                    finishWithSuccess();
+                    return;
+                default:
+                    authenticate();
+            }
         } catch (CryptoException e) {
             finishWithError(e);
         } catch (Exception e) {
@@ -53,17 +60,22 @@ public class BiometricActivity extends AppCompatActivity {
 
     private void authenticate() throws CryptoException {
         switch (mPromptInfo.getType()) {
-          case JUST_AUTHENTICATE:
-            justAuthenticate();
-            return;
-          case REGISTER_SECRET:
-            authenticateToEncrypt(mPromptInfo.invalidateOnEnrollment());
-            return;
-          case LOAD_SECRET:
-            authenticateToDecrypt();
-            return;
+            case JUST_AUTHENTICATE:
+                justAuthenticate();
+                return;
+            case REGISTER_SECRET:
+                authenticateToEncrypt(mPromptInfo.invalidateOnEnrollment());
+                return;
+            case LOAD_SECRET:
+                authenticateToDecrypt();
+                return;
         }
         throw new CryptoException(PluginError.BIOMETRIC_ARGS_PARSING_FAILED);
+    }
+
+    private void clearSecret() throws CryptoException {
+        EncryptedData.clearall(this);
+        return;
     }
 
     private void authenticateToEncrypt(boolean invalidateOnEnrollment) throws CryptoException {
@@ -95,7 +107,8 @@ public class BiometricActivity extends AppCompatActivity {
 
         if (mPromptInfo.isDeviceCredentialAllowed()
                 && mPromptInfo.getType() == BiometricActivityType.JUST_AUTHENTICATE
-                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) { // TODO: remove after fix https://issuetracker.google.com/issues/142740104
+                && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) { // TODO: remove after fix
+                                                                     // https://issuetracker.google.com/issues/142740104
             promptInfoBuilder.setDeviceCredentialAllowed(true);
         } else {
             promptInfoBuilder.setNegativeButtonText(mPromptInfo.getCancelButtonTitle());
@@ -103,32 +116,31 @@ public class BiometricActivity extends AppCompatActivity {
         return promptInfoBuilder.build();
     }
 
-    private BiometricPrompt.AuthenticationCallback mAuthenticationCallback =
-            new BiometricPrompt.AuthenticationCallback() {
+    private BiometricPrompt.AuthenticationCallback mAuthenticationCallback = new BiometricPrompt.AuthenticationCallback() {
 
-                @Override
-                public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
-                    super.onAuthenticationError(errorCode, errString);
-                    onError(errorCode, errString);
-                }
+        @Override
+        public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+            super.onAuthenticationError(errorCode, errString);
+            onError(errorCode, errString);
+        }
 
-                @Override
-                public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
-                    super.onAuthenticationSucceeded(result);
-                    try {
-                        finishWithSuccess(result.getCryptoObject());
-                    } catch (CryptoException e) {
-                        finishWithError(e);
-                    }
-                }
+        @Override
+        public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+            super.onAuthenticationSucceeded(result);
+            try {
+                finishWithSuccess(result.getCryptoObject());
+            } catch (CryptoException e) {
+                finishWithError(e);
+            }
+        }
 
-                @Override
-                public void onAuthenticationFailed() {
-                    super.onAuthenticationFailed();
-                    //onError(PluginError.BIOMETRIC_AUTHENTICATION_FAILED.getValue(), PluginError.BIOMETRIC_AUTHENTICATION_FAILED.getMessage());
-                }
-            };
-
+        @Override
+        public void onAuthenticationFailed() {
+            super.onAuthenticationFailed();
+            // onError(PluginError.BIOMETRIC_AUTHENTICATION_FAILED.getValue(),
+            // PluginError.BIOMETRIC_AUTHENTICATION_FAILED.getMessage());
+        }
+    };
 
     // TODO: remove after fix https://issuetracker.google.com/issues/142740104
     private void showAuthenticationScreen() {
@@ -162,8 +174,7 @@ public class BiometricActivity extends AppCompatActivity {
 
     private void onError(int errorCode, @NonNull CharSequence errString) {
 
-        switch (errorCode)
-        {
+        switch (errorCode) {
             case BiometricPrompt.ERROR_USER_CANCELED:
             case BiometricPrompt.ERROR_CANCELED:
                 finishWithError(PluginError.BIOMETRIC_DISMISSED);
@@ -195,12 +206,12 @@ public class BiometricActivity extends AppCompatActivity {
     private void finishWithSuccess(BiometricPrompt.CryptoObject cryptoObject) throws CryptoException {
         Intent intent = null;
         switch (mPromptInfo.getType()) {
-          case REGISTER_SECRET:
-            encrypt(cryptoObject);
-            break;
-          case LOAD_SECRET:
-            intent = getDecryptedIntent(cryptoObject);
-            break;
+            case REGISTER_SECRET:
+                encrypt(cryptoObject);
+                break;
+            case LOAD_SECRET:
+                intent = getDecryptedIntent(cryptoObject);
+                break;
         }
         if (intent == null) {
             setResult(RESULT_OK);
